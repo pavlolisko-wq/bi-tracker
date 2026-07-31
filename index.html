@@ -374,9 +374,17 @@ function fillSel(id,opts,val,allLabel){ const s=document.getElementById(id); s.i
 function buildEmpSel(){
   const s = document.getElementById('selEmp');
   if(!s) return;
-  s.innerHTML = `<option value="__all__">Все сотрудники</option>` +
-    EMPLOYEES.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
-  s.value = state.employee;
+  if(state.userRole === 'manager'){
+    const me = EMPLOYEES.find(e => e.id === state.employee);
+    s.innerHTML = me ? `<option value="${me.id}">${me.name}</option>` : `<option value="${state.employee}">Мои данные</option>`;
+    s.value = state.employee;
+    s.disabled = true;
+  } else {
+    s.disabled = false;
+    s.innerHTML = `<option value="__all__">Все сотрудники</option>` +
+      EMPLOYEES.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    s.value = state.employee;
+  }
 }
 function buildCascade(){
   buildEmpSel();
