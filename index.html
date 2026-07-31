@@ -60,7 +60,7 @@ td input.pct{width:64px}
     <div>🕒 <b>Обновлено:</b> <span id="hdrUpdated">—</span></div>
     <div id="authBox" style="display:flex;gap:8px;align-items:center">
       <button class="btn ghost" id="btnManageEmp" onclick="openEmpMgmtModal()" style="padding:4px 10px;font-size:11px">👥 Управление сотрудниками</button>
-      <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти / Регистрация</button>
+      <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти</button>
     </div>
   </div>
 </header>
@@ -761,6 +761,7 @@ async function loadEmployeesFromSupabase(){
 async function initAuth(){
   if(!sb) return;
   try {
+    checkInviteRedirect();
     await loadEmployeesFromSupabase();
     const { data: { session } } = await sb.auth.getSession();
     if(session && session.user){
@@ -817,32 +818,12 @@ function updateAuthUI(){
   } else {
     state.userRole = 'head';
     box.innerHTML = `<button class="btn ghost" id="btnManageEmp" onclick="openEmpMgmtModal()" style="padding:4px 10px;font-size:11px">👥 Управление сотрудниками</button>
-      <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти / Регистрация</button>`;
+      <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти</button>`;
     const btnM = document.getElementById('btnManageEmp');
     if(btnM) btnM.onclick = openEmpMgmtModal;
     const btnModal = document.getElementById('btnAuthModal');
     if(btnModal) btnModal.onclick = showAuthModal;
   }
-}
-
-let isSignUpMode = false;
-
-function toggleAuthMode(){
-  isSignUpMode = !isSignUpMode;
-  const title = document.getElementById('authModalTitle');
-  if(title) title.textContent = isSignUpMode ? 'Регистрация нового сотрудника' : 'Вход в систему';
-
-  const submitBtn = document.getElementById('btnAuthSubmit');
-  if(submitBtn) submitBtn.textContent = isSignUpMode ? 'Создать пароль и зарегистрироваться' : 'Войти';
-
-  const toggleBtn = document.getElementById('btnToggleAuthMode');
-  if(toggleBtn) toggleBtn.textContent = isSignUpMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
-
-  const nameFld = document.getElementById('fldAuthName');
-  if(nameFld) nameFld.style.display = isSignUpMode ? 'flex' : 'none';
-
-  const errEl = document.getElementById('authError');
-  if(errEl) errEl.style.display = 'none';
 }
 
 function showAuthModal(){
@@ -860,7 +841,6 @@ function hideAuthModal(){
 async function handleAuthSubmit(){
   const email = document.getElementById('inpAuthEmail').value.trim();
   const password = document.getElementById('inpAuthPassword').value.trim();
-  const name = document.getElementById('inpAuthName').value.trim();
   const errEl = document.getElementById('authError');
   if(errEl) errEl.style.display = 'none';
 
@@ -870,17 +850,45 @@ async function handleAuthSubmit(){
   }
 
   try {
-    if(isSignUpMode){
-      const { data, error } = await sb.auth.signUp({
-        email, password, options: { data: { name } }
-      });
-      if(error) throw error;
-      alert('✓ Регистрация успешна! Войдите под созданным аккаунтом.');
-    } else {
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
-      if(error) throw error;
-    }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
     hideAuthModal();
+    render();
+  } catch(err){
+    if(errEl){ errEl.textContent = 'Ошибка: ' + (err.message || err) + '. Если вы новый сотрудник — проверьте почту, приглашение приходит от руководителя.'; errEl.style.display = 'block'; }
+  }
+}
+
+// ---- Установка пароля по приглашению ----
+// Supabase после клика по ссылке в письме-приглашении возвращает пользователя
+// на сайт с #access_token=...&type=invite в адресе — здесь мы это ловим и
+// показываем форму создания пароля вместо обычного логина.
+async function checkInviteRedirect(){
+  const hash = window.location.hash;
+  if(!hash || !hash.includes('access_token') ) return;
+  const params = new URLSearchParams(hash.replace('#',''));
+  const type = params.get('type');
+  if(type !== 'invite' && type !== 'recovery') return;
+
+  const ov = document.getElementById('setPasswordOverlay');
+  if(ov) ov.style.display = 'flex';
+}
+
+async function handleSetPassword(){
+  const password = document.getElementById('inpNewPassword').value.trim();
+  const errEl = document.getElementById('setPasswordError');
+  if(errEl) errEl.style.display = 'none';
+  if(!password || password.length < 6){
+    if(errEl){ errEl.textContent = 'Пароль должен быть не короче 6 символов.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    const { error } = await sb.auth.updateUser({ password });
+    if(error) throw error;
+    history.replaceState(null, '', window.location.pathname);
+    const ov = document.getElementById('setPasswordOverlay');
+    if(ov) ov.style.display = 'none';
+    alert('✓ Пароль создан! Вы вошли в систему.');
     render();
   } catch(err){
     if(errEl){ errEl.textContent = 'Ошибка: ' + (err.message || err); errEl.style.display = 'block'; }
@@ -1105,14 +1113,17 @@ async function handleSaveEmployee(){
   const empRecord = { id: email, email, name, role, assignments, updated_at: new Date().toISOString() };
 
   const idx = EMPLOYEES.findIndex(e => e.email.toLowerCase() === email);
+  const isNewEmployee = idx < 0;
   if(idx >= 0) EMPLOYEES[idx] = Object.assign({}, EMPLOYEES[idx], empRecord);
   else EMPLOYEES.push(empRecord);
 
   saveEmployeesToLocal();
 
+  let dbSaved = false;
   if(sb){
     try {
       await sb.from('employees').upsert([empRecord], { onConflict: 'email' });
+      dbSaved = true;
     } catch(err){ alert('Сохранено локально (Supabase: ' + err.message + ')'); }
   }
 
@@ -1120,7 +1131,18 @@ async function handleSaveEmployee(){
   buildEmpSel();
   renderEmpMgmtTable();
   render();
-  alert(`✓ Сотрудник «${name}» успешно сохранён и добавлен в список!`);
+
+  if(isNewEmployee && dbSaved && sb){
+    try {
+      const { error } = await sb.functions.invoke('invite-employee', { body: { email, name } });
+      if(error) throw error;
+      alert(`✓ Сотрудник «${name}» добавлен. На ${email} отправлено письмо с приглашением создать пароль.`);
+    } catch(err){
+      alert(`✓ Сотрудник «${name}» добавлен, но письмо-приглашение не отправлено (${err.message || err}). Проверьте, что Edge Function "invite-employee" развёрнута в Supabase.`);
+    }
+  } else {
+    alert(`✓ Сотрудник «${name}» успешно сохранён!`);
+  }
 }
 
 function handleEditEmployee(email){
@@ -1156,16 +1178,6 @@ async function handleDeleteEmployee(email){
   render();
 }
 
-const toggleBtn = document.getElementById('btnToggleAuthMode');
-if(toggleBtn){
-  toggleBtn.onclick = () => {
-    isSignUpMode = !isSignUpMode;
-    document.getElementById('authModalTitle').textContent = isSignUpMode ? 'Регистрация сотрудника' : 'Вход в систему';
-    document.getElementById('btnAuthSubmit').textContent = isSignUpMode ? 'Зарегистрироваться' : 'Войти';
-    toggleBtn.textContent = isSignUpMode ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться';
-    document.getElementById('fldAuthName').style.display = isSignUpMode ? 'flex' : 'none';
-  };
-}
 const closeBtn = document.getElementById('btnCloseAuthModal');
 if(closeBtn) closeBtn.onclick = hideAuthModal;
 
@@ -1198,10 +1210,6 @@ try{
   <div style="background:#1e1b4b;border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:390px;box-shadow:0 20px 50px rgba(0,0,0,.5);color:#fff">
     <h3 id="authModalTitle" style="margin:0 0 16px;font-size:18px">Вход в систему</h3>
     <form id="authForm" onsubmit="handleAuthSubmit(); return false;" style="display:flex;flex-direction:column;gap:12px">
-      <div class="fld" id="fldAuthName" style="display:none">
-        <label>ФИО сотрудника</label>
-        <input id="inpAuthName" placeholder="Иван Иванов">
-      </div>
       <div class="fld">
         <label>Email</label>
         <input id="inpAuthEmail" type="email" placeholder="user@company.com" required>
@@ -1210,16 +1218,28 @@ try{
         <label>Пароль</label>
         <input id="inpAuthPassword" type="password" placeholder="••••••••" required>
       </div>
-      <label style="font-size:11.5px;display:flex;align-items:center;gap:6px;margin-top:2px;cursor:pointer;color:var(--mut)">
-        <input type="checkbox" id="chkAuthConsent" required checked>
-        <span>Согласен на обработку персональных данных</span>
-      </label>
+      <div class="note" style="margin-top:0">Новым сотрудникам аккаунт создаёт руководитель в разделе «Управление сотрудниками» — на почту придёт письмо-приглашение для создания пароля.</div>
       <div id="authError" style="display:none;font-size:12px;color:var(--rd);background:rgba(251,113,133,.15);padding:8px;border-radius:8px"></div>
       <button type="submit" class="btn" id="btnAuthSubmit" style="margin-top:6px;padding:10px;font-size:14px">Войти</button>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
-        <button type="button" class="btn ghost" id="btnToggleAuthMode" onclick="toggleAuthMode()" style="padding:4px 8px;font-size:11.5px;text-decoration:underline">Нет аккаунта? Зарегистрироваться</button>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:10px">
         <button type="button" class="btn ghost" id="btnCloseAuthModal" onclick="hideAuthModal()" style="padding:4px 8px;font-size:11.5px;cursor:pointer">Закрыть</button>
       </div>
+    </form>
+  </div>
+</div>
+
+<!-- Модалка установки пароля по приглашению -->
+<div id="setPasswordOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);backdrop-filter:blur(6px);z-index:1001;align-items:center;justify-content:center">
+  <div style="background:#1e1b4b;border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:390px;box-shadow:0 20px 50px rgba(0,0,0,.5);color:#fff">
+    <h3 style="margin:0 0 8px;font-size:18px">👋 Добро пожаловать!</h3>
+    <div class="note" style="margin-top:0">Вас пригласили в систему отслеживания плана. Создайте пароль для входа.</div>
+    <form id="setPasswordForm" onsubmit="handleSetPassword(); return false;" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <div class="fld">
+        <label>Новый пароль</label>
+        <input id="inpNewPassword" type="password" placeholder="••••••••" required minlength="6">
+      </div>
+      <div id="setPasswordError" style="display:none;font-size:12px;color:var(--rd);background:rgba(251,113,133,.15);padding:8px;border-radius:8px"></div>
+      <button type="submit" class="btn" style="margin-top:6px;padding:10px;font-size:14px">Создать пароль и войти</button>
     </form>
   </div>
 </div>
