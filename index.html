@@ -1112,21 +1112,22 @@ async function handleSaveEmployee(){
     assignments.push({ cat, pod });
   });
 
-  const empRecord = { id: email, email, name, role, assignments, updated_at: new Date().toISOString() };
+  const empRecord = { email, name, role, assignments, updated_at: new Date().toISOString() };
 
   const idx = EMPLOYEES.findIndex(e => e.email.toLowerCase() === email);
   const isNewEmployee = idx < 0;
   if(idx >= 0) EMPLOYEES[idx] = Object.assign({}, EMPLOYEES[idx], empRecord);
-  else EMPLOYEES.push(empRecord);
+  else EMPLOYEES.push(Object.assign({ id: email }, empRecord));
 
   saveEmployeesToLocal();
 
   let dbSaved = false;
   if(sb){
     try {
-      await sb.from('employees').upsert([empRecord], { onConflict: 'email' });
+      const { error } = await sb.from('employees').upsert([empRecord], { onConflict: 'email' });
+      if(error) throw error;
       dbSaved = true;
-    } catch(err){ alert('Сохранено локально (Supabase: ' + err.message + ')'); }
+    } catch(err){ alert('Ошибка сохранения в Supabase: ' + (err.message || err) + '\n\nСотрудник сохранён только локально в этом браузере, другие пользователи его не увидят.'); }
   }
 
   resetEmpForm();
