@@ -767,12 +767,14 @@ async function initAuth(){
     if(session && session.user){
       AUTH_USER = session.user;
     }
-    sb.auth.onAuthStateChange((_event, session) => {
+    sb.auth.onAuthStateChange(async (_event, session) => {
       AUTH_USER = session ? session.user : null;
       updateAuthUI();
       if(AUTH_USER){
         loadFromSupabase();
-        loadEmployeesFromSupabase();
+        await loadEmployeesFromSupabase();
+        updateAuthUI();
+        render();
       }
     });
   } catch(e){}
