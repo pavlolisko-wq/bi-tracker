@@ -734,6 +734,16 @@ async function saveToSupabase(period, net, dim, patch){
   } catch(e){}
 }
 
+async function markEmployeeLastSeen(email){
+  if(!sb || !email) return;
+  try {
+    await sb.from('employees').update({
+      last_seen_at: new Date().toISOString(),
+      is_registered: true
+    }).eq('email', email.toLowerCase());
+  } catch(e){}
+}
+
 async function loadEmployeesFromSupabase(){
   if(!sb) return;
   try {
@@ -772,6 +782,7 @@ async function initAuth(){
       updateAuthUI();
       if(AUTH_USER){
         loadFromSupabase();
+        markEmployeeLastSeen(AUTH_USER.email);
         await loadEmployeesFromSupabase();
         updateAuthUI();
         render();
@@ -779,6 +790,7 @@ async function initAuth(){
     });
   } catch(e){}
   updateAuthUI();
+  setInterval(() => { if(AUTH_USER) markEmployeeLastSeen(AUTH_USER.email); }, 2 * 60 * 1000);
 }
 
 function updateAuthUI(){
