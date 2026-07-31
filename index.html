@@ -699,6 +699,19 @@ function recalcRestOfYear(){
   recalculatePlans(rest);
 }
 
+const selEmpEl = document.getElementById('selEmp'); if(selEmpEl) selEmpEl.onchange=e=>{
+  state.employee = e.target.value;
+  state.cat = '__all__'; state.pod = '__all__'; state.sub = '__all__'; state.brand = '__all__';
+  if(state.employee !== '__all__'){
+    const emp = EMPLOYEES.find(x => x.id === state.employee || x.email === state.employee || x.name === state.employee);
+    const a = emp && emp.assignments && emp.assignments[0];
+    if(a){
+      if(a.cat) state.cat = a.cat;
+      if(a.pod) state.pod = a.pod;
+    }
+  }
+  render();
+};
 const selCatEl = document.getElementById('selCat'); if(selCatEl) selCatEl.onchange=e=>{state.cat=e.target.value;render();};
 const selPodEl = document.getElementById('selPod'); if(selPodEl) selPodEl.onchange=e=>{state.pod=e.target.value;render();};
 const selSubEl = document.getElementById('selSub'); if(selSubEl) selSubEl.onchange=e=>{state.sub=e.target.value;render();};
