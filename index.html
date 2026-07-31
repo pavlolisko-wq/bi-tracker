@@ -59,7 +59,6 @@ td input.pct{width:64px}
     <div>📅 <b>Сегодня:</b> <span id="hdrToday">30 июля 2026 г.</span></div>
     <div>🕒 <b>Обновлено:</b> <span id="hdrUpdated">—</span></div>
     <div id="authBox" style="display:flex;gap:8px;align-items:center">
-      <button class="btn ghost" id="btnManageEmp" onclick="openEmpMgmtModal()" style="padding:4px 10px;font-size:11px">👥 Управление сотрудниками</button>
       <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти</button>
     </div>
   </div>
@@ -853,7 +852,7 @@ function updateAuthUI(){
     }
 
     const roleBadge = state.userRole === 'head' ? '👑 Руководитель' : (state.userRole === 'lead' ? '⭐ Тимлидер' : '👤 Менеджер');
-    const canMgmt = state.userRole === 'head' || state.userRole === 'lead';
+    const canMgmt = state.userRole === 'head';
 
     box.innerHTML = `<button class="btn ghost" id="btnManageEmp" onclick="openEmpMgmtModal()" style="${canMgmt?'':'display:none;'}padding:4px 10px;font-size:11px">👥 Управление сотрудниками</button>
       <span style="color:#34d399;font-weight:600" title="Роль: ${roleBadge}">👤 ${email} (${roleBadge})</span>
@@ -872,11 +871,8 @@ function updateAuthUI(){
       render();
     };
   } else {
-    state.userRole = 'head';
-    box.innerHTML = `<button class="btn ghost" id="btnManageEmp" onclick="openEmpMgmtModal()" style="padding:4px 10px;font-size:11px">👥 Управление сотрудниками</button>
-      <button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти</button>`;
-    const btnM = document.getElementById('btnManageEmp');
-    if(btnM) btnM.onclick = openEmpMgmtModal;
+    state.userRole = null;
+    box.innerHTML = `<button class="btn ghost" id="btnAuthModal" style="padding:4px 10px;font-size:11px">🔐 Войти</button>`;
     const btnModal = document.getElementById('btnAuthModal');
     if(btnModal) btnModal.onclick = showAuthModal;
   }
@@ -1038,6 +1034,10 @@ document.getElementById('fileImp').onchange=e=>{ const f=e.target.files[0]; if(!
 
 // ---- Логика панели Управления Сотрудниками ----
 function openEmpMgmtModal(){
+  if(state.userRole !== 'head'){
+    alert('Управление сотрудниками доступно только руководителю.');
+    return;
+  }
   const ov = document.getElementById('empMgmtOverlay');
   if(ov) ov.style.display = 'flex';
   try { loadEmployeesFromLocal(); } catch(e){}
