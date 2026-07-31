@@ -699,6 +699,26 @@ function recalcRestOfYear(){
   recalculatePlans(rest);
 }
 
+document.querySelectorAll('#segMode button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#segMode button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.mode = b.dataset.m;
+    state.nets = MONTHNET[state.mode].slice();
+    render();
+  };
+});
+document.querySelectorAll('#segMetric button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#segMetric button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.metric = b.dataset.x;
+    render();
+  };
+});
+const selMonthEl = document.getElementById('selMonth'); if(selMonthEl) selMonthEl.onchange=e=>{state.month=+e.target.value;render();};
+const selQEl = document.getElementById('selQ'); if(selQEl) selQEl.onchange=e=>{state.q=e.target.value;render();};
+
 const selEmpEl = document.getElementById('selEmp'); if(selEmpEl) selEmpEl.onchange=e=>{
   state.employee = e.target.value;
   state.cat = '__all__'; state.pod = '__all__'; state.sub = '__all__'; state.brand = '__all__';
