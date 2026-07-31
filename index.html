@@ -811,6 +811,7 @@ async function initAuth(){
     });
   } catch(e){}
   updateAuthUI();
+  if(AUTH_USER) render();
   setInterval(() => { if(AUTH_USER) markEmployeeLastSeen(AUTH_USER.email); }, 2 * 60 * 1000);
 }
 
