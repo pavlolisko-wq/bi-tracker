@@ -698,6 +698,12 @@ function recalcRestOfYear(){
   recalculatePlans(rest);
 }
 
+document.querySelectorAll('#segBrandShareMode button').forEach(b=>{
+  b.onclick=()=>{
+    state.brandShareMode = b.dataset.bs;
+    renderBrandShare();
+  };
+});
 document.querySelectorAll('#segMode button').forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll('#segMode button').forEach(x=>x.classList.remove('on'));
