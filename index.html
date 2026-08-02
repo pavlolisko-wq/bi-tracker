@@ -74,6 +74,7 @@ td input.pct{width:64px}
       <div class="fld"><label>Прошло дней</label><input id="inpElapsed" type="number" min="1" style="width:74px"></div>
       <div class="fld"><label>Дней в периоде</label><input id="inpTotal" type="number" min="1" style="width:74px" readonly></div>
       <div class="fld"><label>Показатель</label><div class="seg" id="segMetric"><button data-x="money" class="on">$</button><button data-x="units">шт</button></div></div>
+      <div class="fld"><label>CNED (MDA)</label><div class="seg" id="segCned"><button data-v="ex" class="on">Без CNED</button><button data-v="incl">С CNED</button></div></div>
       <div class="fld"><label>Сотрудник</label><select id="selEmp"></select></div>
       <div class="fld"><label>Категория</label><select id="selCat"></select></div>
       <div class="fld"><label>Подкатегория</label><select id="selPod"></select></div>
@@ -129,7 +130,20 @@ const MONTHS=PLAN.months;
 const NETC={'Enter':'#22d3ee','Ultra':'#ec4899','B2B':'#facc15','B2D':'#a78bfa'};
 const MONTHNET={month:['Enter','Ultra'],quarter:['B2D','B2B']};
 const nf=new Intl.NumberFormat('ru-RU');
-const state={mode:'month',nets:['Enter','Ultra'],month:0,q:'q3',metric:'money',employee:'__all__',cat:'__all__',pod:'__all__',sub:'__all__',brand:'__all__',elapsed:null,total:null,brandShareMode:'plan'};
+const state={mode:'month',nets:['Enter','Ultra'],month:0,q:'q3',metric:'money',employee:'__all__',cat:'__all__',pod:'__all__',sub:'__all__',brand:'__all__',elapsed:null,total:null,brandShareMode:'plan',cned:'ex'};
+
+// ---- CNED (крупный клиент/сегмент, исключаемый из факта при "Без CNED") ----
+// Значения по каналу Enter, категория -> {f: сумма продаж $, fr: валовая прибыль $}.
+// Добавляйте сюда новые периоды/категории по мере поступления данных.
+const CNED_DATA = {
+  'month|m0': { 'MDA': { f: 54505.52, fr: 11307.70 } }
+};
+function cnedAdjust(net, cat, field, value){
+  if(state.cned !== 'ex' || net !== 'Enter' || value == null) return value;
+  const period = CNED_DATA[ctxBase()];
+  const amt = period && period[cat] && period[cat][field];
+  return amt != null ? value - amt : value;
+}
 
 // ---- Supabase конфигурация ----
 const SUPABASE_URL='https://nqrscsgpoqajevquatnm.supabase.co';
@@ -323,11 +337,16 @@ function planBaselineNet(net,dim){
 function keySegIdx(n){ return n; } // 1..4 соответствует o[1..4]
 function usedFieldNet(net,dim,field){
   const rec=getRecNet(net,dim); const own=(rec[field]==null||rec[field]==='')?null:+rec[field];
-  if(dim.split('|').length>=4) return own;
-  const children=directChildDimsNet(net,dim);
-  let sum=0,has=false;
-  for(const c of children){ const v=usedFieldNet(net,c,field); if(v!=null){ sum+=v; has=true; } }
-  return has? sum : own;
+  let result;
+  if(dim.split('|').length>=4){ result = own; }
+  else {
+    const children=directChildDimsNet(net,dim);
+    let sum=0,has=false;
+    for(const c of children){ const v=usedFieldNet(net,c,field); if(v!=null){ sum+=v; has=true; } }
+    result = has? sum : own;
+  }
+  if(dim.indexOf('|')===-1 && (field==='f'||field==='fr')) result = cnedAdjust(net, dim, field, result);
+  return result;
 }
 function usedPlanNet(net,dim){
   const rec=getRecNet(net,dim); const own=(rec.p==null||rec.p==='')?null:+rec.p;
@@ -698,6 +717,14 @@ function recalcRestOfYear(){
   recalculatePlans(rest);
 }
 
+document.querySelectorAll('#segCned button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#segCned button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.cned = b.dataset.v;
+    render();
+  };
+});
 document.querySelectorAll('#segBrandShareMode button').forEach(b=>{
   b.onclick=()=>{
     state.brandShareMode = b.dataset.bs;
