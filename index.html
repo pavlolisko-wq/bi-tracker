@@ -513,12 +513,13 @@ function render(){
       let wp=0,wb=0; for(const net of state.nets){ const rp=getRecNet(net,k.dim).pr; if(rp!=null&&rp!==''){ const npl=usedPlanNet(net,k.dim); wp+=(+rp)*npl; wb+=npl; } }
       pr= wb>0? (wp/wb).toFixed(2) : '';
     }
+    const periodFinished = state.elapsed >= state.total;
     const exec=plan>0?f/plan*100:null;
-    const persp=plan>0?projFact(f)/plan*100:null;
-    const perspAbs=plan>0?projFact(f):null;
+    const persp=(!periodFinished && plan>0)?projFact(f)/plan*100:null;
+    const perspAbs=(!periodFinished && plan>0)?projFact(f):null;
     const planRentAbs=(pr!=='')? plan*(+pr)/100 : null;
-    const perspRentAbs=factRentAbs!=null? projFact(factRentAbs) : null;
-    const perspR=(planRentAbs!=null&&planRentAbs>0&&perspRentAbs!=null)? perspRentAbs/planRentAbs*100 : null;
+    const perspRentAbs=(!periodFinished && factRentAbs!=null)? projFact(factRentAbs) : null;
+    const perspR=(!periodFinished && planRentAbs!=null&&planRentAbs>0&&perspRentAbs!=null)? perspRentAbs/planRentAbs*100 : null;
     totP+=plan; totF+=f;
     if(pr!==''){wPlanR+=(+pr)*plan; wBase+=plan;}
     if(planRentAbs!=null) totPlanRentAbs+=planRentAbs;
@@ -527,15 +528,18 @@ function render(){
     if(mismatchFr) mismatches.push({key:k.key,type:'Факт рент., $',own:ownFr,rolled:rolledFr});
     return {...k,plan,ownPlan,f,ownF,pr,factRentAbs,ownFr,exec,persp,perspR,perspAbs,mismatchF,mismatchFr,rolledF,rolledFr,planRentAbs,perspRentAbs};
   });
-  const execT=totP>0?totF/totP*100:null, perspT=totP>0?projFact(totF)/totP*100:null;
+  const periodFinishedT = state.elapsed >= state.total;
+  const execT=totP>0?totF/totP*100:null, perspT=(!periodFinishedT && totP>0)?projFact(totF)/totP*100:null;
   const planRT=wBase>0?wPlanR/wBase:null;
-  const perspRentAbsT=totFactRentAbs>0?projFact(totFactRentAbs):null;
-  const perspRT=(totPlanRentAbs>0&&perspRentAbsT!=null)?perspRentAbsT/totPlanRentAbs*100:null;
+  const perspRentAbsT=(!periodFinishedT && totFactRentAbs>0)?projFact(totFactRentAbs):null;
+  const perspRT=(!periodFinishedT && totPlanRentAbs>0&&perspRentAbsT!=null)?perspRentAbsT/totPlanRentAbs*100:null;
 
   document.getElementById('kPlan').textContent=fmt(totP);
   document.getElementById('kFact').textContent=fmt(totF);
   document.getElementById('kExec').innerHTML=pill(execT);
-  document.getElementById('kPersp').innerHTML=pill(perspT)+`<span style="font-size:12px;font-weight:600;color:var(--mut);margin-left:6px">${totP>0?fmt(projFact(totF)):''}</span>`;
+  document.getElementById('kPersp').innerHTML=periodFinishedT
+    ? `<span class="muted" style="font-size:13px">— (месяц завершён)</span>`
+    : pill(perspT)+`<span style="font-size:12px;font-weight:600;color:var(--mut);margin-left:6px">${totP>0?fmt(projFact(totF)):''}</span>`;
 
   const kYoYCard=document.getElementById('kYoYCard');
   if(kYoYCard){
