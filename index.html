@@ -251,42 +251,65 @@ function passFilter(o){
 function dimPath(o){const lv=level();return lv==='cat'?o[1]:lv==='pod'?o[1]+'|'+o[2]:lv==='sub'?o[1]+'|'+o[2]+'|'+o[3]:o[1]+'|'+o[2]+'|'+o[3]+'|'+o[4];}
 function activeRows(){return PLAN.rows.filter(o=>state.nets.includes(o[0]));}
 
-// ---- доля брендов по текущему фильтру (План / Факт) ----
+// ---- доля брендов по текущему фильтру (План / План+Факт) ----
 function brandShareData(){
   const rows=activeRows().filter(passFilter);
   const byBrand=new Map();
   for(const o of rows){ const b=o[4]; if(!byBrand.has(b)) byBrand.set(b,new Set()); byBrand.get(b).add(o[1]+'|'+o[2]+'|'+o[3]+'|'+o[4]); }
   const isFact = state.brandShareMode==='fact';
   const arr=[...byBrand.entries()].map(([b,dims])=>{
-    let s=0;
+    let planVal=0, factVal=0;
     for(const d of dims){
-      if(isFact) {
-        const v = usedFieldMulti(d,'f');
-        if(v!=null) s+=v;
-      } else {
-        s+=usedPlanMulti(d);
-      }
+      planVal += usedPlanMulti(d);
+      const v = usedFieldMulti(d,'f');
+      if(v!=null) factVal += v;
     }
-    return {brand:b,val:s};
-  }).filter(x=>x.val>0);
-  arr.sort((a,b)=>b.val-a.val);
-  const tot=arr.reduce((s,x)=>s+x.val,0);
-  return {rows:arr.map(x=>({...x,share:tot>0?x.val/tot*100:0})),tot,isFact};
+    return {brand:b, planVal, factVal};
+  }).filter(x=>x.planVal>0 || x.factVal>0);
+  arr.sort((a,b)=> isFact ? (b.factVal-a.factVal) : (b.planVal-a.planVal));
+  const totPlan=arr.reduce((s,x)=>s+x.planVal,0);
+  const totFact=arr.reduce((s,x)=>s+x.factVal,0);
+  return {
+    rows:arr.map(x=>({...x, planShare: totPlan>0?x.planVal/totPlan*100:0, factShare: totFact>0?x.factVal/totFact*100:0})),
+    tot: isFact?totFact:totPlan, isFact
+  };
 }
 function renderBrandShare(){
   const host=document.getElementById('brandShareBars'); if(!host) return;
   const {rows,tot,isFact}=brandShareData();
   const scope=[state.cat,state.pod,state.sub].filter(x=>x!=='__all__').join(' › ')||'все категории';
   const lblEl=document.getElementById('brandShareModeLabel');
-  if(lblEl) lblEl.textContent = isFact ? 'факт' : 'план';
+  if(lblEl) lblEl.textContent = isFact ? 'план vs факт' : 'план';
   document.querySelectorAll('#segBrandShareMode button').forEach(b=>b.classList.toggle('on', b.getAttribute('data-bs')===state.brandShareMode));
-  document.getElementById('brandShareTag').textContent=`${rows.length} брендов · ${scope} · ${isFact?'по факту':'по плану'}`;
+  document.getElementById('brandShareTag').textContent=`${rows.length} брендов · ${scope} · ${isFact?'план vs факт':'по плану'}`;
   host.innerHTML=rows.map(r=>{
-    const w=Math.min(100,r.share);
+    if(isFact){
+      const wp=Math.min(100,r.planShare), wf=Math.min(100,r.factShare);
+      const diff = r.planVal>0 ? ((r.factVal-r.planVal)/r.planVal*100) : null;
+      const diffColor = diff==null ? 'var(--mut)' : (diff>=0 ? 'var(--gr)' : 'var(--rd)');
+      const diffTxt = diff==null ? '' : `${diff>=0?'+':''}${diff.toFixed(0)}%`;
+      return `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:700">
+          <span class="muted" style="overflow:hidden;text-overflow:ellipsis" title="${xmlEsc(r.brand)}">${r.brand}</span>
+          <span style="color:${diffColor}">${diffTxt}</span>
+        </div>
+        <div class="brow" style="grid-template-columns:38px 1fr 88px;margin-top:2px">
+          <div class="muted" style="font-size:9.5px">План</div>
+          <div class="track"><div class="fill" style="width:${wp.toFixed(1)}%;background:linear-gradient(90deg,#22d3ee,#7c3aed);opacity:.55"></div></div>
+          <div class="muted" style="text-align:right;font-size:10px">${fmt(r.planVal)}</div>
+        </div>
+        <div class="brow" style="grid-template-columns:38px 1fr 88px;margin-top:2px">
+          <div class="muted" style="font-size:9.5px">Факт</div>
+          <div class="track"><div class="fill" style="width:${wf.toFixed(1)}%;background:linear-gradient(90deg,#34d399,#059669)"></div></div>
+          <div style="text-align:right;font-weight:700;font-size:10.5px">${fmt(r.factVal)}</div>
+        </div>
+      </div>`;
+    }
+    const w=Math.min(100,r.planShare);
     return `<div class="brow" style="grid-template-columns:130px 1fr 92px"><div class="muted" style="overflow:hidden;text-overflow:ellipsis" title="${xmlEsc(r.brand)}">${r.brand}</div>
-      <div class="track"><div class="fill" style="width:${w.toFixed(1)}%;background:${isFact?'linear-gradient(90deg,#34d399,#059669)':'linear-gradient(90deg,#22d3ee,#7c3aed)'}"></div></div>
-      <div style="text-align:right;font-weight:800">${r.share.toFixed(1)}% <span class="muted" style="font-weight:400;font-size:10.5px">${fmt(r.val)}</span></div></div>`;
-  }).join('')||`<div class="muted">Нет данных (${isFact?'факт не введён':'план равен 0'}) для выбранного фильтра.</div>`;
+      <div class="track"><div class="fill" style="width:${w.toFixed(1)}%;background:linear-gradient(90deg,#22d3ee,#7c3aed)"></div></div>
+      <div style="text-align:right;font-weight:800">${r.planShare.toFixed(1)}% <span class="muted" style="font-weight:400;font-size:10.5px">${fmt(r.planVal)}</span></div></div>`;
+  }).join('')||`<div class="muted">Нет данных для выбранного фильтра.</div>`;
 }
 
 function renderSoS(){
